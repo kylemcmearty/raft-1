@@ -40,11 +40,13 @@ def _provider_error(e: Exception) -> str:
 
 
 def _servers(body: dict) -> dict:
-    """The spec's servers; with {"extended": true}, pointed at the /extended data."""
+    """The spec's servers; with {"extended": true}, pointed at the /extended data
+    and returning every field (date, email, payment...), not just Raft's four."""
     servers = load_servers()
     if body.get("extended") is True:
         for server in servers.values():
             server["base_url"] += "/extended"
+            server["default_fields"] = list(server["record_fields"])
     return servers
 
 

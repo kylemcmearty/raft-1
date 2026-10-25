@@ -57,14 +57,14 @@ def ensure_api(base_url: str, extended: bool = False) -> None:
     raise ApiError("dummy API did not start; see logs/api.log")
 
 
-def answer(query: str, llm) -> None:
+def answer(query: str, llm, servers: dict | None = None) -> None:
     """Runs one question and prints the JSON. Errors are logged, not raised."""
     if len(query) > 500:
         log.error("query too long (max 500 characters)")
         return
     log.info("query: %s", query)
     try:
-        output = run_agent(query, llm)
+        output = run_agent(query, llm, servers=servers)
     except ApiError as e:
         log.error("%s", e)
         return
@@ -81,7 +81,7 @@ def answer(query: str, llm) -> None:
     print(json.dumps(output, indent=2), flush=True)
 
 
-def interactive(llm) -> None:
+def interactive(llm, servers: dict | None = None) -> None:
     print("Ask about orders ('quit' to exit).", file=sys.stderr)
     while True:
         try:
@@ -93,7 +93,7 @@ def interactive(llm) -> None:
             continue
         if query.lower() in ("quit", "exit", "q"):
             return
-        answer(query, llm)  # a failed question doesn't end the session
+        answer(query, llm, servers)  # a failed question doesn't end the session
 
 
 def main() -> int:
@@ -113,7 +113,11 @@ def main() -> int:
         log.error("%s", e)
         return 1
 
-    interactive(llm)
+    servers = load_servers()
+    if args.extended:  # show every field (date, email, payment...), not just Raft's four
+        for server in servers.values():
+            server["default_fields"] = list(server["record_fields"])
+    interactive(llm, servers)
     return 0
 
 
