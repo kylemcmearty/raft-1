@@ -35,7 +35,7 @@ Bad arguments go back to the LLM as errors it can fix. Fatal problems, like the 
 
 ## Extended data
 
-`python main.py --extended` runs the same API with 50 generated orders instead of Raft's 5. About 25% are in messy layouts. Optional fields (`date`, `email`, `payment`) come and go, like real APIs. A few records are bad on purpose (blank, no total, a duplicate ID). Without the flag, the API behaves exactly as Raft wrote it.
+`python main.py --extended` runs the same API with 8 generated orders instead of Raft's 5: one in Raft's format, 4 in messy layouts, and 3 bad ones. Optional fields (`date`, `email`, `payment`) come and go, like real APIs. The bad ones are on purpose: a blank record, one with no total, and a duplicate ID. Without the flag, the API behaves exactly as Raft wrote it.
 
 ### Starting the extended API
 ```
@@ -46,9 +46,9 @@ python dummy_customer_api.py --extended
 ```
 curl -X GET http://localhost:5001/api/orders
 curl -X GET http://localhost:5001/api/order/2001
-curl -X GET http://localhost:5001/api/order/2031     # bad record: no total
+curl -X GET http://localhost:5001/api/order/2006     # bad record: no total
 curl -X GET http://localhost:5001/api/order/9999     # not found (404)
-curl -s http://localhost:5001/api/orders | jq '.raw_orders | length'   # 50
+curl -s http://localhost:5001/api/orders | jq '.raw_orders | length'   # 8
 ```
 
 ### Running the agent against it

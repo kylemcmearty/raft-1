@@ -62,7 +62,7 @@ def test_moved_records_key_is_found():
 def test_optional_fields_that_come_and_go():
     import dummy_customer_api as extended_api
 
-    rows = extended_api.generate_rows()
+    rows = extended_api.generate_rows(50)  # enough rows to find both cases
     with_all = next(r for r in rows if r["date"] and r["email"] and r["payment"])
     without = next(r for r in rows if not r["date"] and not r["payment"])
     for row in (with_all, without):

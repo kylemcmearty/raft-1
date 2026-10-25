@@ -45,8 +45,8 @@ def get_order_by_id(order_id):
 
 
 # --- Extended data (python dummy_customer_api.py --extended) --------------------
-# 50 generated orders instead of the 5 above: most in the format above, about
-# 25% in other layouts, optional fields (date, email, payment) that come and go,
+# 5 generated orders instead of the 5 above, one in each layout (the format
+# above plus 4 messy ones), optional fields (date, email, payment) that come and go,
 # and a few bad records on purpose. A fixed seed keeps the data the same every run.
 
 FIRST = ["John", "Sarah", "Mike", "Rachel", "Chris", "Ana", "Ben", "Cara", "Dev", "Emma",
@@ -105,9 +105,10 @@ def _slashes(o):
 MESSY = [_pipes, _sentence, _key_value, _slashes]
 
 
-def generate_rows(n: int = 50, seed: int = 42) -> list[dict]:
+def generate_rows(n: int = 5, seed: int = 42) -> list[dict]:
     """The structured orders behind the text, so answers can be checked."""
     rng = random.Random(seed)
+    layouts = [_raft, *MESSY]
     rows = []
     for i in range(n):
         city, state, state_name = rng.choice(CITIES)
@@ -119,23 +120,27 @@ def generate_rows(n: int = 50, seed: int = 42) -> list[dict]:
             "date": (date(2026, 1, 1) + timedelta(days=rng.randint(0, 272))).isoformat(),
             "email": f"{first}.{last}{i}@example.com".lower(),
             "payment": rng.choice(PAYMENTS),
-            "format": _raft if rng.random() < 0.7 else rng.choice(MESSY),
+            "format": layouts[i % len(layouts)],  # every layout shows up
         })
-        # Each optional field is missing from about 1 in 5 orders.
+        # Optional fields come and go: about 1 in 5 orders is missing each one.
         for field in ("date", "email", "payment"):
             if rng.random() < 0.2:
                 rows[-1][field] = None
     return rows
 
 
-def generate(n: int = 50, seed: int = 42) -> list[str]:
-    orders = [o["format"](o) for o in generate_rows(n, seed)]
+def generate(n: int = 5, seed: int = 42) -> list[str]:
+    rows = generate_rows(n, seed)
+    orders = [o["format"](o) for o in rows]
 
     # Bad records on purpose.
-    orders[15] = ""                                                              # blank
-    orders[30] = "Order 2031: Buyer=Sam Fox, Location=Dayton, OH, Total=pending, Items: chair"  # no total
-    orders[45] = _raft({"id": 2010, "buyer": "Kim Duplicate", "city": "Austin", "state": "TX",
-                         "state_name": "Texas", "total": 99.99, "items": ["mouse"]})  # duplicate ID
+    next_id = 2001 + n
+    orders.append("")                                                            # blank
+    orders.append(f"Order {next_id}: Buyer=Sam Fox, Location=Dayton, OH, "
+                  f"Total=pending, Items: chair")                                # no total
+    orders.append(_raft({"id": rows[0]["id"], "buyer": "Kim Duplicate", "city": "Austin",
+                         "state": "TX", "state_name": "Texas", "total": 99.99,
+                         "items": ["mouse"]}))                                   # duplicate ID
     return orders
 
 
