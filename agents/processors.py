@@ -13,6 +13,7 @@ import requests
 from langgraph.config import get_stream_writer
 
 from agents import records
+from agents.llm import low_effort
 
 log = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ def text_records(ctx, server, tool, args: dict) -> dict:
     texts = [] if status == 404 else extract_texts(payload, tool["records_path"])
 
     progress(f"Got {len(texts)} raw record(s)")
-    parsed, rejected = records.parse_records(ctx.llm, texts, server["record_schema"], progress)
+    parsed, rejected = records.parse_records(low_effort(ctx.llm), texts, server["record_schema"], progress)
     progress(f"Checked every value against the source text: {len(parsed)} kept, {len(rejected)} rejected")
     # The API's lookups are fuzzy (substring match); enforce exact matches here.
     exact = [r for r in parsed if all(str(r[f]) == v for f, v in must_equal.items())]
