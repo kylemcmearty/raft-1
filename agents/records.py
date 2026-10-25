@@ -6,9 +6,11 @@ Filtering: the LLM's `where`/`fields` are validated and applied in plain code;
 the LLM only describes the filter, it never decides which records match.
 Nothing here knows about orders: fields, types and formats all come from the spec."""
 
+import contextvars
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from datetime import date
 
@@ -85,9 +87,10 @@ FORMATS = {
 # --- Parsing ---------------------------------------------------------------
 
 # Batches keep each LLM call small no matter how many records the API returns.
-MAX_BATCH_RECORDS = 20
+MAX_BATCH_RECORDS = 10
 MAX_BATCH_CHARS = 6000
 MAX_RECORD_CHARS = 2000
+MAX_PARALLEL_BATCHES = 6
 
 SYSTEM_PROMPT = """You extract structured records from raw text.
 Rules:
@@ -219,16 +222,32 @@ def _attempt(llm, pending, feedback, record_schema, progress=None):
     """Parses and checks pending records. Returns (accepted, failures)."""
     accepted, failures = {}, {}
     batches = list(_batches(pending))
-    for n, batch in enumerate(batches, 1):
-        if progress:
-            progress(f"Model parsing batch {n} of {len(batches)} ({len(batch)} records)")
+    if not batches:
+        return accepted, failures
+    if progress:
+        progress(f"Model parsing {len(pending)} record(s) in {len(batches)} batch(es) at once")
+
+    def run(batch):
         try:
-            by_index = _parse_batch(llm, batch, feedback, record_schema)
+            return _parse_batch(llm, batch, feedback, record_schema)
         except openai.APIError:
             raise  # the model provider is down or out of credits: stop, don't reject good records
         except Exception as e:  # bad JSON or a malformed reply: these records fail checks
             log.warning("parse batch of %d failed: %s", len(batch), e)
-            by_index = {}
+            return {}
+
+    # Batches are independent, so they go to the model in parallel. Each thread
+    # gets a copy of the context so progress events still reach the stream.
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_BATCHES, len(batches))) as pool:
+        futures = {pool.submit(contextvars.copy_context().run, run, b): n for n, b in enumerate(batches)}
+        for done, future in enumerate(as_completed(futures), 1):
+            results[futures[future]] = future.result()
+            if progress and len(batches) > 1:
+                progress(f"Parsed batch {done} of {len(batches)}")
+
+    for n, batch in enumerate(batches):
+        by_index = results[n]
         for i, text in batch:
             recs = by_index.get(i, [])
             if len(recs) != 1:

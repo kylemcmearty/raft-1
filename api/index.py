@@ -17,6 +17,7 @@ from langgraph.errors import GraphRecursionError
 from agents.graph import run_agent, stream_agent
 from agents.llm import ConfigError, get_llm
 from agents.processors import ApiError
+from agents.registry import load_servers
 from dummy_customer_api import app
 
 app.json.sort_keys = False  # keep fields in order: orderId, buyer, state, total
@@ -28,16 +29,26 @@ for noisy in ("httpx", "httpcore", "openai", "urllib3"):
 log = logging.getLogger("api")
 
 
+def _servers(body: dict) -> dict:
+    """The spec's servers; with {"extended": true}, pointed at the /extended data."""
+    servers = load_servers()
+    if body.get("extended") is True:
+        for server in servers.values():
+            server["base_url"] += "/extended"
+    return servers
+
+
 @app.route("/api/ask", methods=["POST"])
 def ask():
-    query = str((request.get_json(silent=True) or {}).get("query", "")).strip()
+    body = request.get_json(silent=True) or {}
+    query = str(body.get("query", "")).strip()
     if not query:
         return jsonify({"error": "query is required"}), 400
     if len(query) > 500:
         return jsonify({"error": "query too long (max 500 characters)"}), 400
     log.info("query: %s", query)
     try:
-        return jsonify(run_agent(query, get_llm()))
+        return jsonify(run_agent(query, get_llm(), servers=_servers(body)))
     except ConfigError as e:
         log.error("%s", e)
         return jsonify({"error": "server is not configured"}), 500
@@ -55,14 +66,15 @@ def ask():
 def ask_stream():
     """Same as /api/ask, but streams the agent's steps as newline-delimited JSON
     (tool_call, progress, tool_result, then done or error) so a UI can show them live."""
-    query = str((request.get_json(silent=True) or {}).get("query", "")).strip()
+    body = request.get_json(silent=True) or {}
+    query = str(body.get("query", "")).strip()
     if not query or len(query) > 500:
         return jsonify({"error": "query is required (max 500 characters)"}), 400
-    log.info("query (stream): %s", query)
+    log.info("query (stream%s): %s", ", extended" if body.get("extended") is True else "", query)
 
     def events():
         try:
-            for event in stream_agent(query, get_llm()):
+            for event in stream_agent(query, get_llm(), servers=_servers(body)):
                 yield json.dumps(event) + "\n"
         except ConfigError as e:
             log.error("%s", e)

@@ -144,6 +144,24 @@ def use_extended() -> None:
     ORDERS[:] = generate()
 
 
+# The extended data is also always served under /extended, so one deployment
+# can offer both (the web UI's "extended" toggle uses these routes).
+EXTENDED_ORDERS = generate()
+
+
+@app.route("/extended/api/orders", methods=["GET"])
+def get_extended_orders():
+    return jsonify({"status": "ok", "raw_orders": random.sample(EXTENDED_ORDERS, len(EXTENDED_ORDERS))})
+
+
+@app.route("/extended/api/order/<order_id>", methods=["GET"])
+def get_extended_order_by_id(order_id):
+    for text in EXTENDED_ORDERS:
+        if text and order_id in text:  # same fuzzy match as above
+            return jsonify({"status": "ok", "raw_order": text})
+    return jsonify({"status": "not_found"}), 404
+
+
 if __name__ == "__main__":
     if "--extended" in sys.argv:
         use_extended()

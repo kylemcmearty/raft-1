@@ -147,5 +147,5 @@ def test_stream_events_in_order():
     assert types.count("tool_result") == 4 and types[-1] == "done"
     progress = [e["message"] for e in events if e["type"] == "progress"]
     assert any(m.startswith("Calling the API") for m in progress)
-    assert any(m.startswith("Model parsing batch 1 of 1") for m in progress)
+    assert any(m.startswith("Model parsing 5 record(s) in 1 batch") for m in progress)
     assert len(events[-1]["output"]["orders"]) == 3

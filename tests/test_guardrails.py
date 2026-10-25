@@ -88,7 +88,7 @@ def test_large_input_is_batched():
     many = [f"Order {2000 + i}: Buyer=A B, Location=X, OH, Total=$1.00, Items: y" for i in range(100)]
     llm = FakeLLM()
     orders, _ = parse_records(llm, many, SCHEMA)
-    assert len(orders) == 100 and llm.parse_calls == 5  # 20 per batch
+    assert len(orders) == 100 and llm.parse_calls == 10  # 10 per batch
 
 
 def test_provider_error_stops_instead_of_rejecting():
