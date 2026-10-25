@@ -1,0 +1,6 @@
+.venv/
+logs/
+tests/
+prep/
+.env
+architecture.png

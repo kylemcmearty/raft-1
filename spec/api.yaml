@@ -1,0 +1,60 @@
+# The single OpenAPI spec for every API the agent can use (Cloudflare-style: one
+# spec, endpoints grouped by tag). Each tag is a group the agent discovers with
+# discover_server; each endpoint is a tool. The x- fields are OpenAPI extensions.
+openapi: 3.0.0
+info:
+  title: Raft APIs
+  version: "1.0"
+servers:
+  - url: http://localhost:5001
+
+tags:
+  - name: customer-orders
+    description: Customer order records (buyer, location, total, items).
+    x-record-schema: Order 
+    x-collection-name: orders  
+    x-default-fields: [orderId, buyer, state, total]
+
+paths:
+  /api/orders:
+    get:
+      tags: [customer-orders]
+      operationId: list_orders
+      x-processor: text-records
+      summary: List all customer orders. Use this for searches and filters.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer }
+          x-agent-exposed: false
+      x-records-path: raw_orders
+  /api/order/{order_id}:
+    get:
+      tags: [customer-orders]
+      operationId: get_order
+      x-processor: text-records
+      summary: Fetch one customer order by its numeric order ID.
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9]+$" }
+          x-must-equal-field: orderId
+      x-records-path: raw_order
+
+components:
+  schemas:
+    Order:
+      type: object
+      x-key: orderId                
+      required: [orderId, buyer, state, total]
+      properties:
+        orderId: { type: string, pattern: "^[0-9]+$", description: "Numeric order ID, e.g. 1001" }
+        buyer:   { type: string, description: "Buyer full name" }
+        city:    { type: string, description: "Buyer city" }
+        state:   { type: string, format: us-state, description: "Buyer US state" }
+        total:   { type: number, minimum: 0, description: "Order total in USD" }
+        items:   { type: array, items: { type: string }, description: "Item names in the order" }
+        date:    { type: string, format: date, description: "Order date" }
+        email:   { type: string, description: "Buyer email address" }
+        payment: { type: string, description: "Payment method, e.g. card or paypal" }
