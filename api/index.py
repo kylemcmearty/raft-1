@@ -17,6 +17,8 @@ from agents.llm import ConfigError, get_llm
 from agents.processors import ApiError
 from dummy_customer_api import app
 
+app.json.sort_keys = False  # keep fields in order: orderId, buyer, state, total
+
 # Vercel's filesystem is read-only, so log to stderr only.
 logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(name)s: %(message)s")
 for noisy in ("httpx", "httpcore", "openai", "urllib3"):
