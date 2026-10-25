@@ -215,10 +215,13 @@ def _parse_batch(llm, batch, feedback, record_schema) -> dict[int, list[dict]]:
     return by_index
 
 
-def _attempt(llm, pending, feedback, record_schema):
+def _attempt(llm, pending, feedback, record_schema, progress=None):
     """Parses and checks pending records. Returns (accepted, failures)."""
     accepted, failures = {}, {}
-    for batch in _batches(pending):
+    batches = list(_batches(pending))
+    for n, batch in enumerate(batches, 1):
+        if progress:
+            progress(f"Model parsing batch {n} of {len(batches)} ({len(batch)} records)")
         try:
             by_index = _parse_batch(llm, batch, feedback, record_schema)
         except openai.APIError:
@@ -239,7 +242,7 @@ def _attempt(llm, pending, feedback, record_schema):
     return accepted, failures
 
 
-def parse_records(llm, texts: list[str], record_schema: dict) -> tuple[list[dict], list[dict]]:
+def parse_records(llm, texts: list[str], record_schema: dict, progress=None) -> tuple[list[dict], list[dict]]:
     """Parses raw texts. Returns (records, rejected). Each failing record gets
     one retry with its errors as feedback; after that it is rejected, never guessed."""
     pending, rejected = [], []
@@ -251,13 +254,15 @@ def parse_records(llm, texts: list[str], record_schema: dict) -> tuple[list[dict
         else:
             pending.append((i, text))
 
-    accepted, failures = _attempt(llm, pending, {}, record_schema)
+    accepted, failures = _attempt(llm, pending, {}, record_schema, progress)
     if failures:
         log.info("retrying %d record(s) that failed checks", len(failures))
+        if progress:
+            progress(f"{len(failures)} record(s) failed the checks; asking the model again")
         for i, errors in failures.items():
             log.info("  record %d: %s", i, "; ".join(errors))
         retry = [(i, t) for i, t in pending if i in failures]
-        more, failures = _attempt(llm, retry, failures, record_schema)
+        more, failures = _attempt(llm, retry, failures, record_schema, progress)
         accepted.update(more)
 
     for i, errors in failures.items():

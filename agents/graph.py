@@ -71,10 +71,34 @@ def build_graph(ctx: RunContext):
     return graph.compile()
 
 
-def run_agent(query: str, llm, **ctx_kwargs) -> dict:
+def stream_agent(query: str, llm, **ctx_kwargs):
+    """Runs the agent and yields events as it works, for a live UI:
+    tool_call (the LLM's decision), progress (inside a tool), tool_result,
+    then done (the final output)."""
     ctx = RunContext(llm, **ctx_kwargs)
     graph = build_graph(ctx)
-    state = graph.invoke({"messages": [HumanMessage(query)]}, {"recursion_limit": MAX_STEPS})
-    if ctx.rejected:
-        log.warning("%d record(s) rejected and left out of the output", len(ctx.rejected))
-    return state["output"]
+    stream = graph.stream({"messages": [HumanMessage(query)]}, {"recursion_limit": MAX_STEPS},
+                          stream_mode=["updates", "custom"])
+    for mode, chunk in stream:
+        if mode == "custom":
+            yield chunk
+            continue
+        for node, update in chunk.items():
+            if node == "agent":
+                for call in getattr(update["messages"][-1], "tool_calls", None) or []:
+                    yield {"type": "tool_call", "id": call["id"], "name": call["name"], "args": call["args"]}
+            elif node == "tools":
+                for msg in update["messages"]:
+                    yield {"type": "tool_result", "id": msg.tool_call_id, "name": msg.name,
+                           "content": str(msg.content)[:2000], "error": msg.status == "error"}
+            elif node == "finalize":
+                if ctx.rejected:
+                    log.warning("%d record(s) rejected and left out of the output", len(ctx.rejected))
+                yield {"type": "done", "output": update["output"]}
+
+
+def run_agent(query: str, llm, **ctx_kwargs) -> dict:
+    for event in stream_agent(query, llm, **ctx_kwargs):
+        if event["type"] == "done":
+            return event["output"]
+    raise RuntimeError("the agent stopped without an answer")

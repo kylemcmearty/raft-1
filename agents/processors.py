@@ -10,10 +10,20 @@ import logging
 import re
 
 import requests
+from langgraph.config import get_stream_writer
 
 from agents import records
 
 log = logging.getLogger(__name__)
+
+def progress(message: str) -> None:
+    """Sends a progress step to anyone streaming the agent (the web UI). A no-op
+    when the processor runs outside a graph, e.g. in tests."""
+    try:
+        get_stream_writer()({"type": "progress", "message": message})
+    except Exception:
+        pass
+
 
 class ApiError(Exception):
     """An API is unreachable or broken. Fatal: not retried by the LLM."""
@@ -83,10 +93,13 @@ def text_records(ctx, server, tool, args: dict) -> dict:
 
     log.info("invoke %s %s params=%s where=%s fields=%s shape=%s",
              tool["method"], path, query, conditions, out_fields, shape)
+    progress(f"Calling the API: {tool['method']} {path}")
     status, payload = ctx.get(server["base_url"] + path, query)
     texts = [] if status == 404 else extract_texts(payload, tool["records_path"])
 
-    parsed, rejected = records.parse_records(ctx.llm, texts, server["record_schema"])
+    progress(f"Got {len(texts)} raw record(s)")
+    parsed, rejected = records.parse_records(ctx.llm, texts, server["record_schema"], progress)
+    progress(f"Checked every value against the source text: {len(parsed)} kept, {len(rejected)} rejected")
     # The API's lookups are fuzzy (substring match); enforce exact matches here.
     exact = [r for r in parsed if all(str(r[f]) == v for f, v in must_equal.items())]
     matched = records.filter_records(exact, conditions)

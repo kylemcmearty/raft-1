@@ -134,3 +134,18 @@ def test_parsed_count_is_before_exact_match():
     server = ctx.servers["customer-orders"]
     summary = text_records(ctx, server, server["tools"]["get_order"], {"params": {"order_id": "100"}})
     assert summary == {"fetched": 1, "parsed": 1, "rejected": 0, "matched": 0}
+
+
+def test_stream_events_in_order():
+    from agents.graph import stream_agent
+
+    events = list(stream_agent("q", FakeLLM(script({"tool_name": "list_orders", "where": OHIO_OVER_500})),
+                               get=fake_api()))
+    types = [e["type"] for e in events]
+    assert [e["name"] for e in events if e["type"] == "tool_call"] == [
+        "discover_server", "discover_tools", "get_tool_schema", "invoke_tool"]
+    assert types.count("tool_result") == 4 and types[-1] == "done"
+    progress = [e["message"] for e in events if e["type"] == "progress"]
+    assert any(m.startswith("Calling the API") for m in progress)
+    assert any(m.startswith("Model parsing batch 1 of 1") for m in progress)
+    assert len(events[-1]["output"]["orders"]) == 3

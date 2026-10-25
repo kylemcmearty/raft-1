@@ -9,10 +9,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from flask import jsonify, request
+import json
+
+from flask import Response, jsonify, request, stream_with_context
 from langgraph.errors import GraphRecursionError
 
-from agents.graph import run_agent
+from agents.graph import run_agent, stream_agent
 from agents.llm import ConfigError, get_llm
 from agents.processors import ApiError
 from dummy_customer_api import app
@@ -47,3 +49,33 @@ def ask():
     except Exception:
         log.exception("unexpected error")
         return jsonify({"error": "unexpected error"}), 500
+
+
+@app.route("/api/ask/stream", methods=["POST"])
+def ask_stream():
+    """Same as /api/ask, but streams the agent's steps as newline-delimited JSON
+    (tool_call, progress, tool_result, then done or error) so a UI can show them live."""
+    query = str((request.get_json(silent=True) or {}).get("query", "")).strip()
+    if not query or len(query) > 500:
+        return jsonify({"error": "query is required (max 500 characters)"}), 400
+    log.info("query (stream): %s", query)
+
+    def events():
+        try:
+            for event in stream_agent(query, get_llm()):
+                yield json.dumps(event) + "\n"
+        except ConfigError as e:
+            log.error("%s", e)
+            yield json.dumps({"type": "error", "message": "server is not configured"}) + "\n"
+        except ApiError as e:
+            log.error("%s", e)
+            yield json.dumps({"type": "error", "message": str(e)}) + "\n"
+        except GraphRecursionError:
+            yield json.dumps({"type": "error", "message": "agent did not finish within the step limit"}) + "\n"
+        except Exception:
+            log.exception("unexpected error")
+            yield json.dumps({"type": "error", "message": "unexpected error"}) + "\n"
+
+    return Response(stream_with_context(events()), mimetype="application/x-ndjson",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
