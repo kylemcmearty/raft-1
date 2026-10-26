@@ -1,17 +1,14 @@
 # Raft Order Agent
 
+Visit https://kylemcmearty.com/raft for interactive agent UI. 
 
 ## Design
 
 ![Architecture](architecture.png)
 
-- **Agent:** the LLM (`openai/gpt-oss-120b:exacto` via OpenRouter, temperature 0) decides which tool to call next.
 - **4 tools, modeled on [Uber's MCP gateway](https://www.uber.com/us/en/blog/designing-mcp-gateway/):** `discover_server` → `discover_tools` → `get_tool_schema` → `invoke_tool`. The agent learns the API by looking it up, not from hard-coded endpoints.
 - **One spec as the source of truth, like [Cloudflare's Forge](https://blog.cloudflare.com/forge-open-source-generation-pipeline/):** `spec/api.yaml` is one OpenAPI spec for everything, like Cloudflare's single spec for its whole API. Endpoints are grouped by tag. Each tag is a group the agent finds with `discover_server`, and each endpoint is a tool. The spec also defines the parameters and record fields. Adding an API means adding a tag, its paths and a schema to the spec, not changing code.
 - **`invoke_tool`:** looks up the tool in the spec and hands it to the processor the spec names (`x-processor`). The `text-records` processor fetches the raw text, has the LLM parse it, checks every record, then filters, sorts and limits in code, or computes one summary number (count, sum, average, min, max). The LLM gets back only counts. A new kind of API means writing one new processor; after that, it's only spec edits.
-- **Finalize:** code builds and sorts the JSON. The LLM never writes the output.
-
-With only two endpoints, hard-coding them would be simpler. The discovery tools are what let this scale to many APIs without changing the agent, which is the problem Uber built the pattern for. The discovery tools are plain lookups, so they return the same answer every time.
 
 ## How the LLM is constrained
 
@@ -23,7 +20,6 @@ With only two endpoints, hard-coding them would be simpler. The discovery tools 
 | Parse records | Strict JSON output. **Every value must appear in the source text**, and there must be exactly one record per input. A record that fails gets one retry with the errors included, then it's rejected and logged, never guessed |
 | Write the answer | It can't. Code builds the JSON. If the tools can't answer a request (delete, weather, invalid input), the output is `{"error": "<short reason>"}`, and nothing else the LLM wrote gets through |
 
-Bad arguments go back to the LLM as errors it can fix. Fatal problems, like the API being down or a missing key, stop the run with a clear message and exit code 1.
 
 ## Edge cases
 
@@ -35,25 +31,14 @@ Bad arguments go back to the LLM as errors it can fix. Fatal problems, like the 
 
 ## Extended data
 
-`python main.py --extended` runs the same API with 8 generated orders instead of Raft's 5: one in Raft's format, 4 in messy layouts, and 3 bad ones. Optional fields (`date`, `email`, `payment`) come and go, like real APIs. The bad ones are on purpose: a blank record, one with no total, and a duplicate ID. Without the flag, the API behaves exactly as Raft wrote it.
+`--extended` swaps Raft's orders for 5 messy ones: different layouts, optional fields (`date`, `email`, `payment`) that come and go, and bad records. Missing fields return `null`.
 
-### Starting the extended API
 ```
-python dummy_customer_api.py --extended
-```
+python dummy_customer_api.py --extended   # start the API
+python main.py --extended                 # run the agent against it
 
-### Testing the extended API
-```
-curl -X GET http://localhost:5001/api/orders
-curl -X GET http://localhost:5001/api/order/2001
-curl -X GET http://localhost:5001/api/order/2006     # bad record: no total
-curl -X GET http://localhost:5001/api/order/9999     # not found (404)
-curl -s http://localhost:5001/api/orders | jq '.raw_orders | length'   # 8
-```
-
-### Running the agent against it
-```
-python main.py --extended
+curl http://localhost:5001/api/orders
+curl http://localhost:5001/api/order/2004   # bad record: no total
 ```
 
 ## Layout

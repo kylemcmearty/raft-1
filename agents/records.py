@@ -100,7 +100,6 @@ Rules:
 - If a value is not in the record, use an empty string (or [] for lists)."""
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
-_EMPTY = {"string": "", "array": [], "number": None}
 
 
 def llm_schema(record_schema: dict) -> dict:
@@ -179,7 +178,7 @@ def _normalize(rec: dict, record_schema: dict) -> dict:
     for name, spec in record_schema["properties"].items():
         value = rec.get(name)
         if value is None or value == "" or value == []:
-            value = _EMPTY.get(spec["type"])
+            value = None  # a missing optional field is null in the output
         elif spec["type"] == "number":
             value = float(value)
         out[name] = value
@@ -354,8 +353,10 @@ def validate_fields(requested: list[str] | None, fields: dict, default: list[str
 def _matches(actual, cond: dict) -> bool:
     if isinstance(actual, list):  # e.g. items: match if any element matches
         return any(_matches(a, cond) for a in actual)
-    if actual is None:
-        return False
+    if actual is None:  # a missing field equals "" ("orders with no email")
+        if cond["op"] not in ("eq", "ne", "in", "contains"):
+            return False
+        actual = ""
     if isinstance(actual, str):
         actual = actual.lower()
     op, value = cond["op"], cond["value"]

@@ -100,7 +100,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Natural-language order search agent")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--extended", action="store_true",
-                        help="serve 8 generated orders (messy layouts, bad records) instead of Raft's 5")
+                        help="serve 5 messy records (3 orders in different layouts + 2 bad) instead of Raft's 5")
     args = parser.parse_args()
     log_file = setup_logging(args.verbose)
     log.info("logging to %s", log_file)

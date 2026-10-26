@@ -89,3 +89,13 @@ def test_date_filters():
             raise AssertionError(f"accepted {bad}")
         except ValueError:
             pass
+
+
+def test_missing_fields_are_null_and_filterable():
+    from agents import records
+
+    rows = [{"orderId": "1", "email": None}, {"orderId": "2", "email": "a@b.com"}]
+    fields = load_servers()["customer-orders"]["record_fields"]
+    no_email = records.validate_where([{"field": "email", "op": "eq", "value": ""}], fields)
+    assert [r["orderId"] for r in records.filter_records(rows, no_email)] == ["1"]
+    assert records.select(rows, ["orderId", "email"], "orderId")[0]["email"] is None

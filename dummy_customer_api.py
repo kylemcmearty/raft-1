@@ -45,9 +45,9 @@ def get_order_by_id(order_id):
 
 
 # --- Extended data (python dummy_customer_api.py --extended) --------------------
-# 5 generated orders instead of the 5 above, one in each layout (the format
-# above plus 4 messy ones), optional fields (date, email, payment) that come and go,
-# and a few bad records on purpose. A fixed seed keeps the data the same every run.
+# 5 records instead of the 5 above: 3 generated orders, each in a different
+# layout, with optional fields (date, email, payment) that come and go, plus
+# 2 bad records on purpose (blank, no total). A fixed seed keeps the data the same every run.
 
 FIRST = ["John", "Sarah", "Mike", "Rachel", "Chris", "Ana", "Ben", "Cara", "Dev", "Emma",
          "Liam", "Olivia", "Noah", "Ava", "Ethan", "Mia", "Lucas", "Zoe", "Omar", "Priya"]
@@ -105,7 +105,7 @@ def _slashes(o):
 MESSY = [_pipes, _sentence, _key_value, _slashes]
 
 
-def generate_rows(n: int = 5, seed: int = 42) -> list[dict]:
+def generate_rows(n: int = 3, seed: int = 42) -> list[dict]:
     """The structured orders behind the text, so answers can be checked."""
     rng = random.Random(seed)
     layouts = [_raft, *MESSY]
@@ -129,7 +129,7 @@ def generate_rows(n: int = 5, seed: int = 42) -> list[dict]:
     return rows
 
 
-def generate(n: int = 5, seed: int = 42) -> list[str]:
+def generate(n: int = 3, seed: int = 42) -> list[str]:
     rows = generate_rows(n, seed)
     orders = [o["format"](o) for o in rows]
 
@@ -138,9 +138,6 @@ def generate(n: int = 5, seed: int = 42) -> list[str]:
     orders.append("")                                                            # blank
     orders.append(f"Order {next_id}: Buyer=Sam Fox, Location=Dayton, OH, "
                   f"Total=pending, Items: chair")                                # no total
-    orders.append(_raft({"id": rows[0]["id"], "buyer": "Kim Duplicate", "city": "Austin",
-                         "state": "TX", "state_name": "Texas", "total": 99.99,
-                         "items": ["mouse"]}))                                   # duplicate ID
     return orders
 
 
