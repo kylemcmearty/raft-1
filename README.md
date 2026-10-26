@@ -28,6 +28,9 @@ Visit https://kylemcmearty.com/raft for interactive agent UI.
 - **API schema changes:** the LLM can parse any text format, and the same checks still apply. If the response key moves, code searches the payload and logs a warning. To try it, run `python tests/changed_api.py`, which serves new layouts with the records under a different key, then `ORDERS_API_URL=http://localhost:5002 python main.py`.
 - **API quirks:** the API returns orders in random order, so output is sorted by `orderId`. `/api/order/100` returns order 1001 (the API matches any text in the record), so `get_order` keeps only exact ID matches.
 
+## UI
+
+Visit https://kylemcmearty.com/raft for interactive agent UI. 
 
 ## Extended data
 
